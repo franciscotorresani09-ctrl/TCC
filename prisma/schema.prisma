@@ -1,0 +1,599 @@
+// Street-Car database schema
+// PostgreSQL + Prisma. Run `npm run db:push` (dev) or `npm run db:migrate`.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────────────────────
+// Enums
+// ─────────────────────────────────────────────────────────────
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum SellerType {
+  PRIVATE
+  DEALER
+}
+
+enum VehicleCondition {
+  NEW
+  USED
+  CERTIFIED
+}
+
+enum BodyType {
+  SEDAN
+  COUPE
+  SUV
+  PICKUP
+  HATCHBACK
+  CONVERTIBLE
+  WAGON
+  VAN
+  MOTORCYCLE
+  OTHER
+}
+
+enum Transmission {
+  AUTOMATIC
+  MANUAL
+}
+
+enum FuelType {
+  GASOLINE
+  DIESEL
+  HYBRID
+  ELECTRIC
+}
+
+enum Drivetrain {
+  FWD
+  RWD
+  AWD
+  FOUR_WD
+}
+
+enum ListingStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  SOLD
+  REMOVED
+}
+
+enum MessageType {
+  TEXT
+  LISTING
+  OFFER
+  TRADE
+  SYSTEM
+}
+
+enum OfferStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  COUNTERED
+  WITHDRAWN
+}
+
+enum TradeStatus {
+  PENDING
+  ACCEPTED
+  DECLINED
+  COUNTER_OFFER
+  COMPLETED
+  CANCELLED
+}
+
+enum EventType {
+  CAR_MEET
+  CAR_SHOW
+  TRACK_DAY
+  RACING
+  CARS_AND_COFFEE
+  TUNING
+  MOTORCYCLE_MEET
+  CLUB
+}
+
+enum EventVisibility {
+  PUBLIC
+  PRIVATE
+}
+
+enum EventStatus {
+  ACTIVE
+  CANCELLED
+}
+
+enum AttendeeStatus {
+  GOING
+  INTERESTED
+}
+
+enum NotificationType {
+  NEW_MESSAGE
+  NEW_OFFER
+  OFFER_UPDATED
+  TRADE_PROPOSAL
+  TRADE_ACCEPTED
+  TRADE_UPDATED
+  LISTING_FAVORITED
+  LISTING_SOLD
+  EVENT_REMINDER
+  EVENT_RSVP
+  NEW_FOLLOWER
+  NEW_REVIEW
+}
+
+enum ReportReason {
+  SCAM
+  MISLEADING
+  PROHIBITED
+  DUPLICATE
+  OFFENSIVE
+  OTHER
+}
+
+enum ReportStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+
+// ─────────────────────────────────────────────────────────────
+// Users & auth
+// ─────────────────────────────────────────────────────────────
+
+model User {
+  id            String     @id @default(cuid())
+  name          String?
+  username      String?    @unique
+  email         String?    @unique
+  emailVerified DateTime?
+  image         String?
+  passwordHash  String?
+  bio           String?
+  city          String?
+  state         String?
+  country       String?
+  role          Role       @default(USER)
+  sellerType    SellerType @default(PRIVATE)
+  isBanned      Boolean    @default(false)
+  lastSeenAt    DateTime?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  accounts            Account[]
+  sessions            Session[]
+  passwordResetTokens PasswordResetToken[]
+
+  vehicles        Vehicle[]         @relation("SellerVehicles")
+  garage          GarageVehicle[]
+  favorites       Favorite[]        @relation("FavoriteOwner")
+  favoritedBy     Favorite[]        @relation("FavoriteSeller")
+  participants    ConversationParticipant[]
+  sentMessages    Message[]         @relation("SentMessages")
+  receivedMessages Message[]        @relation("ReceivedMessages")
+  offersMade      Offer[]           @relation("OfferBuyer")
+  offersReceived  Offer[]           @relation("OfferSeller")
+  tradesSent      TradeProposal[]   @relation("TradeSender")
+  tradesReceived  TradeProposal[]   @relation("TradeReceiver")
+  eventsOrganized Event[]           @relation("EventOrganizer")
+  eventAttendance EventAttendee[]
+  reviewsWritten  Review[]          @relation("ReviewAuthor")
+  reviewsReceived Review[]          @relation("ReviewTarget")
+  notifications   Notification[]    @relation("NotificationRecipient")
+  notificationsActed Notification[] @relation("NotificationActor")
+  followers       Follow[]          @relation("Following")
+  following       Follow[]          @relation("Follower")
+  reportsFiled    Report[]          @relation("ReportReporter")
+  reportsAgainst  Report[]          @relation("ReportTargetUser")
+
+  @@index([createdAt])
+}
+
+model Account {
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+}
+
+model Session {
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Follow {
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("Follower", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("Following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@id([followerId, followingId])
+  @@index([followingId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Marketplace
+// ─────────────────────────────────────────────────────────────
+
+model Category {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String
+  description String?
+  image       String?
+  sortOrder   Int      @default(0)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+
+  vehicles Vehicle[]
+}
+
+model Vehicle {
+  id            String           @id @default(cuid())
+  slug          String           @unique
+  sellerId      String
+  categoryId    String
+  make          String
+  model         String
+  trim          String?
+  year          Int
+  price         Int
+  mileage       Int
+  condition     VehicleCondition
+  bodyType      BodyType
+  transmission  Transmission
+  fuelType      FuelType
+  engine        String
+  drivetrain    Drivetrain
+  exteriorColor String?
+  interiorColor String?
+  vin           String?
+  description   String
+  features      String[]
+  city          String
+  state         String
+  country       String
+  postalCode    String?
+  latitude      Float?
+  longitude     Float?
+  status        ListingStatus    @default(ACTIVE)
+  isFeatured    Boolean          @default(false)
+  openToTrade   Boolean          @default(true)
+  views         Int              @default(0)
+  soldAt        DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  seller         User            @relation("SellerVehicles", fields: [sellerId], references: [id], onDelete: Cascade)
+  category       Category        @relation(fields: [categoryId], references: [id])
+  images         VehicleImage[]
+  favorites      Favorite[]
+  offers         Offer[]
+  tradesOffered  TradeProposal[] @relation("OfferedVehicle")
+  tradesRequested TradeProposal[] @relation("RequestedVehicle")
+  conversations  Conversation[]
+  messages       Message[]
+  reports        Report[]
+
+  @@index([status, createdAt])
+  @@index([status, price])
+  @@index([status, mileage])
+  @@index([status, views])
+  @@index([make, model])
+  @@index([categoryId])
+  @@index([sellerId])
+  @@index([city, state])
+  @@index([latitude, longitude])
+}
+
+model VehicleImage {
+  id        String   @id @default(cuid())
+  vehicleId String
+  url       String
+  alt       String?
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleId, order])
+}
+
+// Vehicles a user owns and shows off in their profile garage (not for sale).
+model GarageVehicle {
+  id        String   @id @default(cuid())
+  ownerId   String
+  make      String
+  model     String
+  year      Int
+  image     String?
+  notes     String?
+  createdAt DateTime @default(now())
+
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@index([ownerId])
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  vehicleId String?
+  eventId   String?
+  sellerId  String?
+  createdAt DateTime @default(now())
+
+  user    User     @relation("FavoriteOwner", fields: [userId], references: [id], onDelete: Cascade)
+  vehicle Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  event   Event?   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  seller  User?    @relation("FavoriteSeller", fields: [sellerId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, vehicleId])
+  @@unique([userId, eventId])
+  @@unique([userId, sellerId])
+  @@index([vehicleId])
+}
+
+model Offer {
+  id            String      @id @default(cuid())
+  vehicleId     String
+  buyerId       String
+  sellerId      String
+  amount        Int
+  counterAmount Int?
+  message       String?
+  status        OfferStatus @default(PENDING)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  vehicle  Vehicle   @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  buyer    User      @relation("OfferBuyer", fields: [buyerId], references: [id], onDelete: Cascade)
+  seller   User      @relation("OfferSeller", fields: [sellerId], references: [id], onDelete: Cascade)
+  messages Message[]
+
+  @@index([buyerId, createdAt])
+  @@index([sellerId, createdAt])
+}
+
+model TradeProposal {
+  id                 String      @id @default(cuid())
+  senderId           String
+  receiverId         String
+  offeredVehicleId   String
+  requestedVehicleId String
+  // Positive: sender adds cash. Negative: sender asks for cash.
+  cashDifference     Int         @default(0)
+  counterCash        Int?
+  message            String?
+  status             TradeStatus @default(PENDING)
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+
+  sender           User      @relation("TradeSender", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver         User      @relation("TradeReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+  offeredVehicle   Vehicle   @relation("OfferedVehicle", fields: [offeredVehicleId], references: [id], onDelete: Cascade)
+  requestedVehicle Vehicle   @relation("RequestedVehicle", fields: [requestedVehicleId], references: [id], onDelete: Cascade)
+  messages         Message[]
+
+  @@index([senderId, createdAt])
+  @@index([receiverId, createdAt])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Messaging
+// ─────────────────────────────────────────────────────────────
+
+model Conversation {
+  id            String   @id @default(cuid())
+  vehicleId     String?
+  lastMessageAt DateTime @default(now())
+  createdAt     DateTime @default(now())
+
+  vehicle      Vehicle?                  @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  participants ConversationParticipant[]
+  messages     Message[]
+
+  @@index([lastMessageAt])
+}
+
+model ConversationParticipant {
+  conversationId String
+  userId         String
+  lastReadAt     DateTime?
+  joinedAt       DateTime  @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([conversationId, userId])
+  @@index([userId])
+}
+
+model Message {
+  id              String      @id @default(cuid())
+  conversationId  String
+  senderId        String
+  receiverId      String
+  type            MessageType @default(TEXT)
+  content         String
+  vehicleId       String?
+  offerId         String?
+  tradeProposalId String?
+  createdAt       DateTime    @default(now())
+  readAt          DateTime?
+
+  conversation  Conversation   @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender        User           @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiver      User           @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  vehicle       Vehicle?       @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  offer         Offer?         @relation(fields: [offerId], references: [id], onDelete: SetNull)
+  tradeProposal TradeProposal? @relation(fields: [tradeProposalId], references: [id], onDelete: SetNull)
+
+  @@index([conversationId, createdAt])
+  @@index([receiverId, readAt])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Events
+// ─────────────────────────────────────────────────────────────
+
+model Event {
+  id           String          @id @default(cuid())
+  slug         String          @unique
+  organizerId  String
+  title        String
+  description  String
+  type         EventType
+  startsAt     DateTime
+  endsAt       DateTime
+  venue        String
+  city         String
+  state        String
+  country      String
+  coverImage   String
+  maxAttendees Int?
+  visibility   EventVisibility @default(PUBLIC)
+  status       EventStatus     @default(ACTIVE)
+  isFeatured   Boolean         @default(false)
+  reminderSentAt DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  organizer User            @relation("EventOrganizer", fields: [organizerId], references: [id], onDelete: Cascade)
+  attendees EventAttendee[]
+  favorites Favorite[]
+  reports   Report[]
+
+  @@index([visibility, status, startsAt])
+  @@index([type])
+  @@index([organizerId])
+}
+
+model EventAttendee {
+  id        String         @id @default(cuid())
+  eventId   String
+  userId    String
+  status    AttendeeStatus @default(GOING)
+  createdAt DateTime       @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([userId])
+}
+
+// ─────────────────────────────────────────────────────────────
+// Community & trust
+// ─────────────────────────────────────────────────────────────
+
+model Review {
+  id           String   @id @default(cuid())
+  authorId     String
+  targetUserId String
+  rating       Int
+  comment      String
+  isHidden     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  author     User     @relation("ReviewAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  targetUser User     @relation("ReviewTarget", fields: [targetUserId], references: [id], onDelete: Cascade)
+  reports    Report[]
+
+  @@unique([authorId, targetUserId])
+  @@index([targetUserId, createdAt])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  actorId   String?
+  type      NotificationType
+  title     String
+  body      String
+  link      String?
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  user  User  @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  actor User? @relation("NotificationActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([userId, readAt, createdAt])
+}
+
+model Report {
+  id           String       @id @default(cuid())
+  reporterId   String
+  vehicleId    String?
+  eventId      String?
+  targetUserId String?
+  reviewId     String?
+  reason       ReportReason
+  details      String?
+  status       ReportStatus @default(OPEN)
+  createdAt    DateTime     @default(now())
+  resolvedAt   DateTime?
+
+  reporter   User     @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  vehicle    Vehicle? @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+  event      Event?   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  targetUser User?    @relation("ReportTargetUser", fields: [targetUserId], references: [id], onDelete: Cascade)
+  review     Review?  @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+}
