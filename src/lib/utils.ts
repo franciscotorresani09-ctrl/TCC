@@ -94,9 +94,30 @@ export function locationLabel(l: { city?: string | null; state?: string | null; 
   return [l.city, l.state].filter(Boolean).join(", ") || l.country || "";
 }
 
+/**
+ * Public base URL of the site. Falls back to Vercel's system variables and then
+ * localhost, and ignores empty or malformed values instead of crashing.
+ */
+export function getSiteUrl() {
+  const candidates = [
+    process.env.NEXT_PUBLIC_SITE_URL,
+    process.env.VERCEL_PROJECT_PRODUCTION_URL && `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`,
+    process.env.VERCEL_URL && `https://${process.env.VERCEL_URL}`,
+  ];
+  for (const candidate of candidates) {
+    const value = candidate?.trim();
+    if (!value) continue;
+    try {
+      return new URL(value.includes("://") ? value : `https://${value}`).origin;
+    } catch {
+      /* try the next candidate */
+    }
+  }
+  return "http://localhost:3000";
+}
+
 export function absoluteUrl(path = "/") {
-  const base = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
-  return new URL(path, base).toString();
+  return new URL(path, getSiteUrl()).toString();
 }
 
 export function isRecent(date: Date | string, windowMs: number) {

@@ -6,8 +6,9 @@ import { AppProviders } from "@/components/providers/app-providers";
 import { getSessionUser } from "@/server/auth-guard";
 import { getUnreadCounts } from "@/server/services/messages";
 import { SITE } from "@/lib/constants";
+import { getSiteUrl } from "@/lib/utils";
 
-const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
+const siteUrl = getSiteUrl();
 
 export const metadata: Metadata = {
   metadataBase: new URL(siteUrl),
