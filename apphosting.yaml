@@ -1,0 +1,24 @@
+# Firebase App Hosting configuration.
+# Secrets are created with: firebase apphosting:secrets:set <NAME>
+runConfig:
+  minInstances: 0
+  # Real-time chat uses an in-memory event bus, so keep a single instance
+  # (switch the bus to Redis before scaling out).
+  maxInstances: 1
+  memoryMiB: 1024
+  cpu: 1
+
+env:
+  - variable: DATABASE_URL
+    secret: DATABASE_URL
+  - variable: AUTH_SECRET
+    secret: AUTH_SECRET
+  # Cloud Run's disk is temporary, so uploaded photos must go to cloud storage.
+  - variable: STORAGE_DRIVER
+    value: cloudinary
+  - variable: CLOUDINARY_CLOUD_NAME
+    secret: CLOUDINARY_CLOUD_NAME
+  - variable: CLOUDINARY_API_KEY
+    secret: CLOUDINARY_API_KEY
+  - variable: CLOUDINARY_API_SECRET
+    secret: CLOUDINARY_API_SECRET
